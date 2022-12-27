@@ -1,9 +1,8 @@
-package listentx
+package listent
 
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/dafsic/gambler/lib/mylog"
 	"github.com/dafsic/gambler/modules"
@@ -27,15 +26,15 @@ type ListenerImpl struct {
 }
 
 func NewListener(lc fx.Lifecycle, log mylog.Logging, chanMgr channels.ChanManager) Listener {
-
 	listener := &ListenerImpl{
 		l:             log.GetLogger("listener"),
-		wc:            chanMgr.GetChan("tx"),
+		wc:            chanMgr.GetChan("block"),
 		qc:            make(chan bool, 1),
 		kafka_brokers: []string{"localhost:9092"},
-		kafka_topic:   "gambler",
+		kafka_topic:   "block",
 	}
 
+	listener.l.Info("Init...")
 	lc.Append(fx.Hook{
 		// app.start调用
 		OnStart: func(ctx context.Context) error {
@@ -53,10 +52,9 @@ func NewListener(lc fx.Lifecycle, log mylog.Logging, chanMgr channels.ChanManage
 	return listener
 }
 
-var ListenModule = fx.Options(fx.Provide(NewListener))
-
 func (listerner *ListenerImpl) Working() {
 	// make a new reader that consumes from topic-A, partition 0, at last offset
+	// 不写GroupID，则不读历史数据
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:   listerner.kafka_brokers,
 		Topic:     listerner.kafka_topic,
@@ -69,6 +67,7 @@ func (listerner *ListenerImpl) Working() {
 	for {
 		select {
 		case <-listerner.qc:
+			listerner.l.Info("Quit...")
 			if err := r.Close(); err != nil {
 				listerner.l.Error(err.Error())
 				return
@@ -79,7 +78,6 @@ func (listerner *ListenerImpl) Working() {
 				listerner.l.Error(err.Error())
 				continue
 			}
-			fmt.Printf("message at offset %d: %s = %s\n", m.Offset, string(m.Key), string(m.Value))
 			// 解析message，输出交易信息
 			var block modules.Block
 			err = json.Unmarshal(m.Value, &block)
@@ -87,6 +85,7 @@ func (listerner *ListenerImpl) Working() {
 				listerner.l.Error(err.Error())
 				continue
 			}
+			listerner.l.Infof("Receive a block --> ts:%d, hash: %s, height: %d,txs:%d\n", block.Ts, block.BlockHash, block.Height, len(block.Txs))
 			listerner.wc <- &block
 		}
 	}
@@ -95,3 +94,5 @@ func (listerner *ListenerImpl) Working() {
 func (listener *ListenerImpl) Stop() {
 	listener.qc <- true
 }
+
+var ListenModule = fx.Options(fx.Invoke(NewListener))

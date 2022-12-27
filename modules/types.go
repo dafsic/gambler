@@ -8,6 +8,7 @@ type Tx struct {
 }
 
 type Block struct {
+	Ts        int64    `json:"timeStamp"`
 	Height    int64    `json:"blockNumber"`
 	BlockHash string   `json:"blockHash"`
 	Txs       []string `json:"transactionList"`

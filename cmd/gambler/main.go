@@ -21,6 +21,7 @@ func main() {
 			//...
 		},
 	}
+
 	if err := app.Run(os.Args); err != nil {
 		logger.Warnf("%+v", err)
 		return

@@ -25,13 +25,13 @@ func FromFile(path string, def interface{}) (interface{}, error) {
 // FromReader loads config from a reader instance.
 func FromReader(reader io.Reader, def interface{}) (interface{}, error) {
 	cfg := def
-	_, err := toml.DecodeReader(reader, cfg)
+	_, err := toml.NewDecoder(reader).Decode(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	// 环境变量的配置覆盖配置文件中的配置
-	err = envconfig.Process("ROBOT", cfg)
+	err = envconfig.Process("GAMBLER", cfg)
 	if err != nil {
 		return nil, fmt.Errorf("processing env vars overrides: %s", err)
 	}

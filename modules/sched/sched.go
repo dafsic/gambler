@@ -1,45 +1,94 @@
 package sched
 
 import (
+	"context"
+	"fmt"
+
+	"github.com/dafsic/gambler/config"
 	"github.com/dafsic/gambler/lib/mylog"
 	"github.com/dafsic/gambler/modules"
 	"github.com/dafsic/gambler/modules/channels"
+	"github.com/dafsic/gambler/modules/client"
+	"github.com/dafsic/gambler/utils"
 	"go.uber.org/fx"
 )
 
 type Scheduler interface {
+	Working()
+	Stop()
 }
 
-var evenBetAmount = []int{23, 61, 143, 311, 657, 1367, 2823, 5813, 11949}
-var oddBetAmount = []int{22, 60, 140, 306, 646, 1344, 2776, 5716, 11752}
+var base int64 = 1000000
+var betTriggerNum = 3
+
+// 30000
+var minBalance = 1
+
+// 0:下偶数注，1:下奇数注
+var BetAmount = [2][9]int64{{10, 12, 14, 16, 18, 20, 22, 24, 26}, {11, 13, 15, 17, 19, 21, 23, 25, 27}}
+
+//var BetAmount = [2][9]int64{{22, 60, 140, 306, 646, 1344, 2776, 5716, 11752},{23, 61, 143, 311, 657, 1367, 2823, 5813, 11949}}
 
 type SchedulerImpl struct {
-	lastBlockHash   string
-	lastBlockHeight int64
-	lastBetHash     string
-	blockC          chan interface{}
-	betC            chan interface{}
-	betHashC        chan interface{}
-	betCounter      [2]int64 //0:偶数下注次数，1:奇数下注次数
-	blockCounter    [2]int   //0:区块hash是偶数的连续次数，1:连续奇数的次数
-	status          string   //"odd":下了偶数的注, "even":下了奇数的注, "":没下注
+	lastBetHash  string
+	refund       string //回款地址
+	pool         string
+	addr         string //下注的地址
+	pk           string
+	blockC       chan interface{}
+	betC         chan interface{}
+	betHashC     chan interface{}
+	qc           chan bool
+	betCounter   [2]int64 //0:偶数下注次数, 1:奇数下注次数
+	blockCounter [2]int   //0:区块hash是偶数的连续次数, 1:连续奇数的次数
+	status       int      //0:下了偶数的注, 1:下了奇数的注, 其他:无效
+	trx          client.TrxClient
+	l            *utils.Logger
+	isRefund     bool
 }
 
-func NewSchedulerImpl(lc fx.Lifecycle, log mylog.Logging, chanMgr channels.ChanManager) Scheduler {
+func NewScheduler(lc fx.Lifecycle, log mylog.Logging, cfg config.ConfigI, chanMgr channels.ChanManager, cli client.TrxClient) Scheduler {
 	s := &SchedulerImpl{
+		pk:       cfg.GetElem("pk").(string),
+		pool:     cfg.GetElem("pool").(string),
+		addr:     cfg.GetElem("addr").(string),
+		refund:   cfg.GetElem("refund").(string),
 		blockC:   chanMgr.GetChan("block"),
 		betC:     chanMgr.GetChan("bet"),
 		betHashC: chanMgr.GetChan("bethash"),
+		qc:       make(chan bool, 1),
+		trx:      cli,
+		l:        log.GetLogger("sched"),
+		isRefund: true,
 	}
+	s.l.Info("Init...")
+	lc.Append(fx.Hook{
+		// app.start调用
+		OnStart: func(ctx context.Context) error {
+			// 这里不能阻塞
+			go s.Working()
+			return nil
+		},
+		// app.stop调用，收到中断信号的时候调用app.stop
+		OnStop: func(ctx context.Context) error {
+			go s.Stop()
+			return nil
+		},
+	})
+
 	return s
+}
+
+func (s *SchedulerImpl) Stop() {
+	s.qc <- true
 }
 
 func (s *SchedulerImpl) Working() {
 	for {
 		select {
 		//优先级队列
-		case betHash := <-s.betHashC:
-			s.lastBetHash = betHash.(string)
+		case <-s.qc:
+			return
 		default:
 			block := <-s.blockC
 			s.dealBlock(block.(*modules.Block))
@@ -57,58 +106,111 @@ func (s *SchedulerImpl) dealBlock(block *modules.Block) {
 		s.blockCounter[1] += 1
 	}
 
-	if s.blockCounter[0] > 7 && s.status == "" {
-		s.betC <- evenBetAmount[s.betCounter[1]]
-		s.status = "even"
-		s.betCounter[1] += 1
+	s.l.Infof("odd:%d,even:%d\n", s.blockCounter[0], s.blockCounter[1])
+
+	//如果之前中了，要等回款后才继续下注
+	if !s.isRefund {
+		r, e := IsRefund(s.refund, s.addr, block.Ts-3000, block.Ts)
+		if e != nil {
+			s.l.Error(e.Error())
+		}
+		s.isRefund = r
+		s.l.Infof("Refund:%t\n", r)
+		return
 	}
 
-	if s.blockCounter[1] > 7 && s.status == "" {
-		s.betC <- oddBetAmount[s.betCounter[0]]
-		s.status = "odd"
-		s.betCounter[0] += 1
+	//尝试开启第一次下注
+	success, err := s.tryBet(true)
+	if err != nil {
+		s.l.Error(err.Error())
+		return
 	}
 
-	// 如果下单失败，拿不到下注hash，就直接返回，观察到一直不下注，就会看到日志中的下注失败的错误
-	if s.status == "" || s.lastBetHash == "" {
+	if success {
+		return
+	}
+
+	//没下注就不需要处理块
+	if s.lastBetHash == "" {
 		return
 	}
 
 	for _, tx := range block.Txs {
 		if tx == s.lastBetHash { //下注交易包含在区块中
-			if (s.status == "odd" && isOdd) || (s.status == "even" && !isOdd) { //中了
-				s.status = ""
+			if (s.status == 0 && isOdd) || (s.status == 1 && !isOdd) { //中了
+				s.l.Infof("中了,block:%s\n", block.BlockHash)
+				//s.status = 2
 				s.lastBetHash = ""
 				s.betCounter[0] = 0
 				s.betCounter[1] = 0
-			} else { //没中
-				if s.blockCounter[0] > 7 { //没中但偶数连续情况并未被打断，不管是否跳块，继续下注奇数
-					s.betC <- evenBetAmount[s.betCounter[1]]
-					s.betCounter[1] += 1
-				} else if s.betCounter[1] > 7 { //没中但奇数连续情况并未被打断，不管是否跳块，继续下注偶数
-					s.betC <- oddBetAmount[s.betCounter[0]]
-					s.betCounter[0] += 1
+				s.isRefund = false
+			} else {
+				s.l.Infof("没中,block:%s\n", block.BlockHash)
+				//没中，但奇偶连续情况并未打断的情况下，不用管是否跳块，继续下注
+				success, err = s.tryBet(false)
+				if err != nil {
+					s.l.Error(err.Error())
+					return
 				}
-				//没中，但连续奇偶都不足7，说明在跳块中中了，那就认赔了
-			}
 
+				if success {
+					//如果跳块超过7个，并且包含连续超过7个奇偶的时候，就会出现不是从起始下注金额下注的情况
+					//已在tryBet中处理
+					s.l.Info("没中,继续下了一注...")
+				} else {
+					s.l.Info("没中,但在跳块中中了,或者已连续投注9次了")
+					s.lastBetHash = ""
+					s.betCounter[0] = 0
+					s.betCounter[1] = 0
+					//s.status = 2
+				}
+			}
 			return
 		}
 	}
 
 	// 交易没包含在此区块中，则什么都不做，只统计连续奇偶情况
+	s.l.Info("跳块")
 }
 
-var oddMap = map[byte]bool{'0': true, '1': false, '2': true, '3': false, '4': true, '5': false, '6': true, '7': false, '8': true, '9': false}
-
-// IsOddNum 判断一个字符串最后一个数字是偶数吗
-func IsOddNum(h string) bool {
-	l := len(h)
-	for i := 1; i <= l; i++ {
-		if h[l-i] > '9' {
-			continue
-		}
-		return oddMap[h[l-i]]
+func (s *SchedulerImpl) tryBet(first bool) (bool, error) {
+	//已经下过第一次注了，不用下了
+	if first && s.lastBetHash != "" {
+		return false, nil
 	}
-	return true
+
+	for i, v := range s.blockCounter {
+		turn := (i + 1) % 2
+		if v > betTriggerNum && s.betCounter[turn] < 9 {
+			//连续跳块超过7次的时候，可能会出现这种反转下注情况
+			if i == s.status {
+				return false, nil
+			}
+
+			balance, err := s.trx.GetBalance(s.addr)
+			if err != nil {
+				return false, fmt.Errorf("%w%s", err, utils.LineNo())
+			}
+
+			if balance < int64(minBalance)*base {
+				return false, fmt.Errorf("insufficient balance < %d,%s", balance, utils.LineNo())
+			}
+
+			hash, err := s.trx.Betting(BetAmount[turn][s.betCounter[turn]]*base, string(s.pk), s.pool)
+			if err != nil {
+				return false, fmt.Errorf("%w%s", err, utils.LineNo())
+			}
+
+			s.l.Infof("下注:%d,hash:%s\n", BetAmount[turn][s.betCounter[turn]], hash)
+			s.lastBetHash = hash
+			s.betCounter[turn] += 1
+			s.status = turn
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
+
+// var SchedModule = fx.Options(fx.Provide(NewScheduler))
+var SchedModule = fx.Options(fx.Invoke(NewScheduler))

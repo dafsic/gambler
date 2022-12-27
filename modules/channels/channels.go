@@ -1,6 +1,8 @@
 package channels
 
 import (
+	"github.com/dafsic/gambler/lib/mylog"
+	"github.com/dafsic/gambler/utils"
 	"go.uber.org/fx"
 )
 
@@ -13,6 +15,7 @@ type ChanManager interface {
 type ChanManagerImpl struct {
 	chans map[string]chan interface{}
 	//rwlock sync.RWMutex
+	l *utils.Logger
 }
 
 func (cm *ChanManagerImpl) GetChan(name string) chan interface{} {
@@ -30,12 +33,14 @@ func (cm *ChanManagerImpl) CloseChan(name string) {
 	//delete(cm.chans, name)
 }
 
-func NewChanManager() ChanManager {
+func NewChanManager(log mylog.Logging) ChanManager {
 	cs := make(map[string]chan interface{}, 8)
 	c := &ChanManagerImpl{
 		chans: cs,
+		l:     log.GetLogger("channel"),
 	}
 
+	c.l.Info("Init...")
 	// 下注交易的hash
 	c.chans["bethash"] = make(chan interface{}, 8)
 	// 需要下注的数量
