@@ -1,13 +1,11 @@
 package sched
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
-	"github.com/buger/jsonparser"
 	"github.com/dafsic/gambler/utils"
 )
 
