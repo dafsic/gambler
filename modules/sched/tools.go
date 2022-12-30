@@ -24,7 +24,8 @@ func IsOddNum(h string) bool {
 }
 
 func IsRefund(from, to string, minTs, maxTs int64) (bool, error) {
-	url := fmt.Sprintf("https://api.trongrid.io/v1/accounts/%s/transactions?only_to=true&min_timestamp=%d&max_timestamp=%d&search_internal=false", to, minTs, maxTs)
+	//url := fmt.Sprintf("https://api.trongrid.io/v1/accounts/%s/transactions?only_to=true&min_timestamp=%d&max_timestamp=%d&search_internal=false", to, minTs, maxTs)
+	url := fmt.Sprintf("https://nile.trongrid.io/v1/accounts/%s/transactions?only_to=true&min_timestamp=%d&max_timestamp=%d&search_internal=false", to, minTs, maxTs)
 
 	req, _ := http.NewRequest("GET", url, nil)
 

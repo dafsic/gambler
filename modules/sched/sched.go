@@ -25,7 +25,7 @@ var betTriggerNum = 3
 var minBalance = 1
 
 // 0:下偶数注，1:下奇数注
-var BetAmount = [2][9]int64{{10, 12, 14, 16, 18, 20, 22, 24, 26}, {11, 13, 15, 17, 19, 21, 23, 25, 27}}
+var BetAmount = [2][9]int64{{20, 40, 80, 160, 320, 640, 1280, 2560, 5120}, {21, 41, 81, 161, 321, 641, 1281, 2561, 5121}}
 
 //var BetAmount = [2][9]int64{{22, 60, 140, 306, 646, 1344, 2776, 5716, 11752},{23, 61, 143, 311, 657, 1367, 2823, 5813, 11949}}
 
@@ -60,6 +60,7 @@ func NewScheduler(lc fx.Lifecycle, log mylog.Logging, cfg config.ConfigI, chanMg
 		trx:      cli,
 		l:        log.GetLogger("sched"),
 		isRefund: true,
+		status:   2,
 	}
 	s.l.Info("Init...")
 	lc.Append(fx.Hook{
@@ -110,7 +111,7 @@ func (s *SchedulerImpl) dealBlock(block *modules.Block) {
 
 	//如果之前中了，要等回款后才继续下注
 	if !s.isRefund {
-		r, e := IsRefund(s.refund, s.addr, block.Ts-3000, block.Ts)
+		r, e := IsRefund(s.refund, s.addr, block.Ts-6000, block.Ts)
 		if e != nil {
 			s.l.Error(e.Error())
 		}
@@ -139,7 +140,7 @@ func (s *SchedulerImpl) dealBlock(block *modules.Block) {
 		if tx == s.lastBetHash { //下注交易包含在区块中
 			if (s.status == 0 && isOdd) || (s.status == 1 && !isOdd) { //中了
 				s.l.Infof("中了,block:%s\n", block.BlockHash)
-				//s.status = 2
+				s.status = 2
 				s.lastBetHash = ""
 				s.betCounter[0] = 0
 				s.betCounter[1] = 0
@@ -162,7 +163,7 @@ func (s *SchedulerImpl) dealBlock(block *modules.Block) {
 					s.lastBetHash = ""
 					s.betCounter[0] = 0
 					s.betCounter[1] = 0
-					//s.status = 2
+					s.status = 2
 				}
 			}
 			return
@@ -181,12 +182,12 @@ func (s *SchedulerImpl) tryBet(first bool) (bool, error) {
 
 	for i, v := range s.blockCounter {
 		turn := (i + 1) % 2
+		//s.l.Infof("下注条件,i=%d,v=%d,betCounter[%d]=%d\n", i, v, turn, s.betCounter[turn])
 		if v > betTriggerNum && s.betCounter[turn] < 9 {
 			//连续跳块超过7次的时候，可能会出现这种反转下注情况
 			if i == s.status {
 				return false, nil
 			}
-
 			balance, err := s.trx.GetBalance(s.addr)
 			if err != nil {
 				return false, fmt.Errorf("%w%s", err, utils.LineNo())

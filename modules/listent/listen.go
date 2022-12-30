@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/dafsic/gambler/config"
 	"github.com/dafsic/gambler/lib/mylog"
 	"github.com/dafsic/gambler/modules"
 	"github.com/dafsic/gambler/modules/channels"
@@ -25,15 +26,15 @@ type ListenerImpl struct {
 	l             *utils.Logger
 }
 
-func NewListener(lc fx.Lifecycle, log mylog.Logging, chanMgr channels.ChanManager) Listener {
+func NewListener(lc fx.Lifecycle, log mylog.Logging, cfg config.ConfigI, chanMgr channels.ChanManager) Listener {
+
 	listener := &ListenerImpl{
 		l:             log.GetLogger("listener"),
 		wc:            chanMgr.GetChan("block"),
 		qc:            make(chan bool, 1),
-		kafka_brokers: []string{"localhost:9092"},
-		kafka_topic:   "block",
+		kafka_brokers: cfg.GetElem("kafkaBrokers").([]string),
+		kafka_topic:   cfg.GetElem("kafkaTopic").(string),
 	}
-
 	listener.l.Info("Init...")
 	lc.Append(fx.Hook{
 		// app.start调用

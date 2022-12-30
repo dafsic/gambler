@@ -14,12 +14,14 @@ type ConfigI interface {
 
 // robot config
 type GamblerCfg struct {
-	LogLevel string `toml:"loglevel"`
-	TrxNode  string `toml:"trxnode"`
-	Addr     string `toml:"addr"`
-	Pk       string `toml:"pk"`
-	Pool     string `toml:"pool"`
-	Refund   string `toml:"refund"`
+	LogLevel     string   `toml:"loglevel"`
+	TrxNode      string   `toml:"trxnode"`
+	Addr         string   `toml:"addr"`
+	Pk           string   `toml:"pk"`
+	Pool         string   `toml:"pool"`
+	Refund       string   `toml:"refund"`
+	KafkaTopic   string   `toml:"kafkaTopic"`
+	KafkaBrokers []string `toml:"kafkaBrokers"`
 }
 
 func (a *GamblerCfg) GetElem(e string) interface{} {
@@ -49,9 +51,9 @@ func NewRobotCfg(ctx *cli.Context) (ConfigI, error) {
 	}
 	pk := ctx.String("pk")
 	if pk != "" {
-
+		cfg.Pk = pk
 	}
-
+	//fmt.Printf("config---->topic:%s,Brokers:%v\n", cfg.KafkaTopic, cfg.KafkaBrokers)
 	return cfg, nil
 }
 
