@@ -6,6 +6,7 @@ import (
 	"github.com/dafsic/gambler/modules/channels"
 	"github.com/dafsic/gambler/modules/client"
 	"github.com/dafsic/gambler/modules/listent"
+	"github.com/dafsic/gambler/modules/pkmanager"
 	"github.com/dafsic/gambler/modules/sched"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/fx"
@@ -37,13 +38,6 @@ var runCmd = &cli.Command{
 			Usage:   "池子回款地址",
 		},
 		&cli.StringFlag{
-			Name:    "privatekey",
-			Aliases: []string{"pk"},
-			EnvVars: []string{"GAMBLER_PK"},
-			Value:   "",
-			Usage:   "私钥",
-		},
-		&cli.StringFlag{
 			Name:    "address",
 			Aliases: []string{"addr"},
 			EnvVars: []string{"GAMBLER_ADDR"},
@@ -59,6 +53,7 @@ var runCmd = &cli.Command{
 			config.CfgModule,
 			mylog.Module,
 			channels.ChanManagerModule,
+			pkmanager.PKManagerModule,
 			listent.ListenModule,
 			sched.SchedModule,
 			client.ClientModule,

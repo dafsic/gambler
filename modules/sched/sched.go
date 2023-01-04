@@ -18,23 +18,25 @@ type Scheduler interface {
 	Stop()
 }
 
-var base int64 = 1000000
+var trxBase int64 = 1000000
+var usdtBase int64 = 1000000
 var betTriggerNum = 3
 
 // 30000
 var minBalance = 1
 
 // 0:下偶数注，1:下奇数注
-var BetAmount = [2][9]int64{{20, 40, 80, 160, 320, 640, 1280, 2560, 5120}, {21, 41, 81, 161, 321, 641, 1281, 2561, 5121}}
+//var BetAmount = [2][]int64{{20, 40, 80, 160, 320, 640, 1280, 2560, 5120}, {21, 41, 81, 161, 321, 641, 1281, 2561, 5121}}
 
-//var BetAmount = [2][9]int64{{22, 60, 140, 306, 646, 1344, 2776, 5716, 11752},{23, 61, 143, 311, 657, 1367, 2823, 5813, 11949}}
+// usdt用
+var BetAmount = [2][]int64{{10, 20, 40, 80, 160, 320}, {11, 21, 41, 81, 161, 321}}
 
 type SchedulerImpl struct {
 	lastBetHash  string
 	refund       string //回款地址
 	pool         string
 	addr         string //下注的地址
-	pk           string
+	token        string //币种
 	blockC       chan interface{}
 	betC         chan interface{}
 	betHashC     chan interface{}
@@ -49,10 +51,10 @@ type SchedulerImpl struct {
 
 func NewScheduler(lc fx.Lifecycle, log mylog.Logging, cfg config.ConfigI, chanMgr channels.ChanManager, cli client.TrxClient) Scheduler {
 	s := &SchedulerImpl{
-		pk:       cfg.GetElem("pk").(string),
 		pool:     cfg.GetElem("pool").(string),
 		addr:     cfg.GetElem("addr").(string),
 		refund:   cfg.GetElem("refund").(string),
+		token:    cfg.GetElem("token").(string),
 		blockC:   chanMgr.GetChan("block"),
 		betC:     chanMgr.GetChan("bet"),
 		betHashC: chanMgr.GetChan("bethash"),
@@ -111,7 +113,7 @@ func (s *SchedulerImpl) dealBlock(block *modules.Block) {
 
 	//如果之前中了，要等回款后才继续下注
 	if !s.isRefund {
-		r, e := IsRefund(s.refund, s.addr, block.Ts-6000, block.Ts)
+		r, e := IsRefund(s.refund, s.addr, block.Ts-30000, block.Ts, s.token)
 		if e != nil {
 			s.l.Error(e.Error())
 		}
@@ -180,10 +182,21 @@ func (s *SchedulerImpl) tryBet(first bool) (bool, error) {
 		return false, nil
 	}
 
+	var base int64
+	switch s.token {
+	case "trx":
+		base = trxBase
+	case "usdt":
+		base = usdtBase
+	default:
+		return false, nil
+	}
+
+	maxBetNum := len(BetAmount[0])
 	for i, v := range s.blockCounter {
 		turn := (i + 1) % 2
 		//s.l.Infof("下注条件,i=%d,v=%d,betCounter[%d]=%d\n", i, v, turn, s.betCounter[turn])
-		if v > betTriggerNum && s.betCounter[turn] < 9 {
+		if v > betTriggerNum && s.betCounter[turn] < int64(maxBetNum) {
 			//连续跳块超过7次的时候，可能会出现这种反转下注情况
 			if i == s.status {
 				return false, nil
@@ -197,7 +210,7 @@ func (s *SchedulerImpl) tryBet(first bool) (bool, error) {
 				return false, fmt.Errorf("insufficient balance < %d,%s", balance, utils.LineNo())
 			}
 
-			hash, err := s.trx.Betting(BetAmount[turn][s.betCounter[turn]]*base, string(s.pk), s.pool)
+			hash, err := s.trx.Transfer(s.addr, s.pool, BetAmount[turn][s.betCounter[turn]]*base, s.token)
 			if err != nil {
 				return false, fmt.Errorf("%w%s", err, utils.LineNo())
 			}

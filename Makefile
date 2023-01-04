@@ -16,9 +16,9 @@ GO_LDFLAGS += -X '$(PROJECT)/version.GIT_BRANCH=$(GIT_BRANCH)'
 GO_LDFLAGS += -X '$(PROJECT)/version.PROJECT_VERSION=$(GIT_TAG)'
 GO_LDFLAGS += -s -w
 
-.PHONY: default gambler
+.PHONY: default gambler transfer
 
-default: gambler ## Build the default binary file
+default: gambler transfer ## Build the default binary file
 
 check: ## Check working tree is clean or not
 ifneq ($(shell git status -s),)
@@ -26,8 +26,12 @@ ifneq ($(shell git status -s),)
 endif
 
 gambler: ## Build the ELF binary file
-	rm -f lotus-assistant
+	rm -f gambler
 	GOOS=linux GOARCH=amd64 CGO_ENABLE=0 go build -ldflags "$(GO_LDFLAGS)" -o gambler ./cmd/gambler
+
+transfer: ## Build the ELF binary file
+	rm -f transfer
+	GOOS=linux GOARCH=amd64 CGO_ENABLE=0 go build -ldflags "$(GO_LDFLAGS)" -o transfer ./cmd/transfer
 
 clean: ## Remove previous build
 	go clean

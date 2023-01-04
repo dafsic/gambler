@@ -15,11 +15,13 @@ type ConfigI interface {
 // robot config
 type GamblerCfg struct {
 	LogLevel     string   `toml:"loglevel"`
-	TrxNode      string   `toml:"trxnode"`
-	Addr         string   `toml:"addr"`
-	Pk           string   `toml:"pk"`
-	Pool         string   `toml:"pool"`
-	Refund       string   `toml:"refund"`
+	TrxNode      string   `toml:"trxnode"` //trx节点
+	Addr         string   `toml:"addr"`    //下注地址
+	Pool         string   `toml:"pool"`    //池
+	Refund       string   `toml:"refund"`  //回款地址
+	Keys         string   `toml:"keys"`    //存放地址->私钥的txt文件
+	Listen       string   `toml:"listen"`  //http监听地址(transfer使用)
+	Token        string   `toml:"token"`   //token种类(trx,usdt...)
 	KafkaTopic   string   `toml:"kafkaTopic"`
 	KafkaBrokers []string `toml:"kafkaBrokers"`
 }
@@ -48,10 +50,6 @@ func NewRobotCfg(ctx *cli.Context) (ConfigI, error) {
 	cfg, ok := c.(*GamblerCfg)
 	if !ok {
 		return nil, fmt.Errorf("invalid config for assistant, got: %T", c)
-	}
-	pk := ctx.String("pk")
-	if pk != "" {
-		cfg.Pk = pk
 	}
 	//fmt.Printf("config---->topic:%s,Brokers:%v\n", cfg.KafkaTopic, cfg.KafkaBrokers)
 	return cfg, nil

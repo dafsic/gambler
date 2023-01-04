@@ -38,7 +38,8 @@ func (ve Version) String() string {
 
 // semver versions of the rpc api exposed
 var (
-	GamblerVersion = newVerFromStr(PROJECT_VERSION)
+	GamblerVersion  = newVerFromStr(PROJECT_VERSION)
+	TransferVersion = newVerFromStr(PROJECT_VERSION)
 )
 
 //nolint:varcheck,deadcode
