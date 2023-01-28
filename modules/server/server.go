@@ -31,6 +31,7 @@ func NewServer(lc fx.Lifecycle, cfg config.ConfigI, log mylog.Logging) Server {
 	s.l.Info("Init...")
 
 	s.gin = gin.New()
+	s.gin.Use(Record(s.l))
 	//s.gin.Use(s.l)
 	s.srv = &http.Server{
 		Addr:         s.listenAddr,

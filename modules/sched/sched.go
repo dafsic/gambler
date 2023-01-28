@@ -3,6 +3,7 @@ package sched
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dafsic/gambler/config"
 	"github.com/dafsic/gambler/lib/mylog"
@@ -20,16 +21,19 @@ type Scheduler interface {
 
 var trxBase int64 = 1000000
 var usdtBase int64 = 1000000
-var betTriggerNum = 3
+var betTriggerNum = 7
 
 // 30000
 var minBalance = 1
 
+// $pool[1] = [];
+// $pool[2] = [];
 // 0:下偶数注，1:下奇数注
-//var BetAmount = [2][]int64{{20, 40, 80, 160, 320, 640, 1280, 2560, 5120}, {21, 41, 81, 161, 321, 641, 1281, 2561, 5121}}
+// var BetAmount = [2][]int64{{20, 40, 80, 160, 320, 640, 1280, 2560, 5120}, {21, 41, 81, 161, 321, 641, 1281, 2561, 5121}}
+var BetAmount = [2][]int64{{22, 60, 140, 306, 646, 1344, 2776, 5716, 11752}, {23, 61, 143, 311, 657, 1367, 2823, 5813, 11949}}
 
 // usdt用
-var BetAmount = [2][]int64{{10, 20, 40, 80, 160, 320}, {11, 21, 41, 81, 161, 321}}
+//var BetAmount = [2][]int64{{10, 20, 40, 80, 160, 320}, {11, 21, 41, 81, 161, 321}}
 
 type SchedulerImpl struct {
 	lastBetHash  string
@@ -113,7 +117,7 @@ func (s *SchedulerImpl) dealBlock(block *modules.Block) {
 
 	//如果之前中了，要等回款后才继续下注
 	if !s.isRefund {
-		r, e := IsRefund(s.refund, s.addr, block.Ts-30000, block.Ts, s.token)
+		r, e := IsRefund(s.refund, s.addr, block.Ts-60000, block.Ts, s.token)
 		if e != nil {
 			s.l.Error(e.Error())
 		}
@@ -183,10 +187,10 @@ func (s *SchedulerImpl) tryBet(first bool) (bool, error) {
 	}
 
 	var base int64
-	switch s.token {
-	case "trx":
+	switch strings.ToUpper(s.token) {
+	case "TRX":
 		base = trxBase
-	case "usdt":
+	case "USDT":
 		base = usdtBase
 	default:
 		return false, nil

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/dafsic/gambler/lib/mylog"
 	"github.com/dafsic/gambler/modules/client"
@@ -63,8 +65,8 @@ type TxSendReq struct {
 	From   string `json:"from"`
 	To     string `json:"to"`
 	Token  string `json:"token"`
-	Amount int64  `json:"amount"`
-	Note   string `json:"note"`
+	Amount string `json:"amount"`
+	Ts     int64  `json:"ts"`
 }
 
 func getSwitch() bool {
@@ -102,8 +104,8 @@ type SwtichT struct {
 }
 
 func (a *AgentImpl) Send2(c *gin.Context) {
-	ip := c.ClientIP()
-	if ip != "127.0.0.1" {
+	ip, _ := c.Get("cip")
+	if ip.(string) != "127.0.0.1" {
 		a.l.Error("Stop! Ip was banned")
 		c.JSON(200, ErrClientIP)
 		return
@@ -117,16 +119,37 @@ func (a *AgentImpl) Send2(c *gin.Context) {
 	}
 
 	var req TxSendReq
-	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	body, _ := c.Get("body")
+	//bodyBytes, _ := io.ReadAll(c.Request.Body)
 
-	err := json.Unmarshal(bodyBytes, &req)
+	data, err := utils.AesDecryptooBase64(string(body.([]byte)), "iDxSd9m8zJ6wyCh7")
+	if err != nil {
+		a.l.Error(err.Error())
+		c.JSON(200, ErrInternalError)
+		return
+	}
+
+	err = json.Unmarshal([]byte(data), &req)
 	if err != nil {
 		a.l.Error(err.Error())
 		c.JSON(200, ErrIncorrectFormat)
 		return
 	}
 
-	hash, err := a.trx.Transfer(req.From, req.To, req.Amount, req.Token)
+	if time.Now().Unix()-req.Ts > 3 {
+		a.l.Error("time error")
+		c.JSON(200, ErrTimestamp)
+		return
+	}
+
+	amount, err := strconv.ParseInt(req.Amount, 10, 64)
+	if err != nil {
+		a.l.Error(err.Error())
+		c.JSON(200, ErrIncorrectFormat)
+		return
+	}
+
+	hash, err := a.trx.Transfer(req.From, req.To, amount, req.Token)
 	if err != nil {
 		a.l.Error(err.Error())
 		c.JSON(200, ErrInternalError)
@@ -140,7 +163,7 @@ func (a *AgentImpl) RegisterRouters() {
 	a.srv.RegisterHandler("get", "/switch/on", a.SwitchOn)
 	a.srv.RegisterHandler("get", "/switch/off", a.SwitchOff)
 	a.srv.RegisterHandler("get", "/switch/state", a.SwitchState)
-	a.srv.RegisterHandler("post", "/send2", a.Send2)
+	a.srv.RegisterHandler("post", "/tx/send2", a.Send2)
 }
 
 var AgentModule = fx.Options(fx.Provide(NewAgentImpl))

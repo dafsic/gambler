@@ -181,7 +181,6 @@ func (t *TrxClientImpl) createTx(from, to, contract string, amount int64) ([]byt
 
 func (t *TrxClientImpl) sign(msg []byte, pk string) ([]byte, error) {
 	url := fmt.Sprintf("http://%s/wallet/gettransactionsign", t.Node)
-	t.l.Infof("{\"transaction\":%s,\"privateKey\":\"%s\"}", msg, pk)
 	payload := strings.NewReader(fmt.Sprintf("{\"transaction\":%s,\"privateKey\":\"%s\"}", msg, pk))
 	req, _ := http.NewRequest("POST", url, payload)
 	req.Header.Add("accept", "application/json")

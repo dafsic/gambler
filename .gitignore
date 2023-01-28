@@ -2,4 +2,5 @@ gambler
 transfer
 config.toml
 log*
+*log
 keys.txt
