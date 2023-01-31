@@ -33,6 +33,7 @@ require (
 
 require (
 	github.com/btcsuite/btcutil v1.0.2
+	github.com/bwmarrin/snowflake v0.3.0
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/gin-gonic/gin v1.8.2
 	github.com/klauspost/compress v1.15.9 // indirect
