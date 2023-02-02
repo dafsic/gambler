@@ -1,4 +1,4 @@
-package gamblerhandler
+package robot
 
 import "github.com/dafsic/gambler/version"
 
@@ -6,7 +6,7 @@ type errcodeT struct {
 	//200-300:success;400-500:client error;500-600:server error
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
-	Ver  string `json:"config"`
+	Ver  string `json:"version"`
 }
 
 var ver = version.TransferVersion.String()
@@ -21,7 +21,8 @@ var (
 
 	ErrAuth            = errcodeT{401, "Auth failed", ver}
 	ErrPermission      = errcodeT{403, "Permission Denied", ver}
-	ErrNotFound        = errcodeT{404, "Not found", ver}
+	ErrNotFound        = errcodeT{404, "Robot not found", ver}
+	ErrParameter       = errcodeT{405, "Missing parameter", ver}
 	ErrSign            = errcodeT{413, "Sign not match", ver}
 	ErrLimit           = errcodeT{414, "Over the limit", ver}
 	ErrTimestamp       = errcodeT{415, "Invalid request timestamp", ver}

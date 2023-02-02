@@ -1,2 +1,2 @@
-所有channel统一有本模块管理
+modules之间的channel统一由本模块管理
 

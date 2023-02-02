@@ -41,12 +41,9 @@ func NewChanManager(log mylog.Logging) ChanManager {
 	}
 
 	c.l.Info("Init...")
-	// 下注交易的hash
-	c.chans["bethash"] = make(chan interface{}, 8)
-	// 需要下注的数量
-	c.chans["bet"] = make(chan interface{}, 8)
+
 	// 打包进区块的所有交易hash、区块高度、区块hash
-	c.chans["block"] = make(chan interface{}, 128)
+	c.chans["block"] = make(chan interface{}, 1)
 
 	return c
 }
