@@ -76,8 +76,8 @@ CREATE TABLE IF NOT EXISTS `pool` (
     `kind` int(11) NOT NULL DEFAULT 1 COMMENT '规则',
     `refund` VARCHAR(64) NOT NULL COMMENT 'refund addr',
     `token` VARCHAR(32) NOT NULL COMMENT 'TRX/USDT',
-    `min_amount` INT(11) NOT NUL COMMENT '最小下注',
-    `max_amount` INT(11) NOT NUL COMMENT '最小下注',
+    `min_amount` INT(11) NOT NULL COMMENT '最小下注',
+    `max_amount` INT(11) NOT NULL COMMENT '最大下注',
     `state` INT(2) NOT NULL DEFAULT 0 COMMENT '0:invalid/1:valid',
     `ts` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP comment 'create time',
     PRIMARY KEY (`id`),
@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS `pool` (
 | ts         | timestamp    | create time |
 
 ```
-CREATE TABLE IF NOT EXISTS `robot2` (
+CREATE TABLE IF NOT EXISTS `robotv2` (
     `id` INT(11) AUTO_INCREMENT,
     `rid` VARCHAR(20) NOT NULL COMMENT 'robot id',
     `pool` VARCHAR(64) NOT NULL COMMENT 'pool addr',

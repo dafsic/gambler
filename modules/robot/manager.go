@@ -3,6 +3,9 @@ package robot
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"sync"
+	"time"
 
 	"github.com/bwmarrin/snowflake"
 	"github.com/dafsic/gambler/lib/mylog"
@@ -19,6 +22,7 @@ import (
 type RobotManager interface {
 	RegisterRouters()
 	Working()
+	Stop()
 }
 
 type RobotManagerImpl struct {
@@ -31,6 +35,7 @@ type RobotManagerImpl struct {
 	srv    server.Server
 	blockC chan interface{}
 	qc     chan bool
+	mux    sync.Mutex
 }
 
 func NewRobotManager(lc fx.Lifecycle, log mylog.Logging, chanMgr channels.ChanManager, cli client.TrxClient, db store.Store, s server.Server) (RobotManager, error) {
@@ -49,6 +54,7 @@ func NewRobotManager(lc fx.Lifecycle, log mylog.Logging, chanMgr channels.ChanMa
 		return nil, err
 	}
 	m.snow = node
+	m.l.Info("Init...")
 
 	lc.Append(fx.Hook{
 		// app.start调用
@@ -68,6 +74,11 @@ func NewRobotManager(lc fx.Lifecycle, log mylog.Logging, chanMgr channels.ChanMa
 }
 
 func (m *RobotManagerImpl) Working() {
+	m.l.Info("manager working...")
+	err := m.LoadTask()
+	if err != nil {
+		panic(err)
+	}
 	for {
 		select {
 		case <-m.qc:
@@ -76,15 +87,36 @@ func (m *RobotManagerImpl) Working() {
 		default:
 			b := <-m.blockC
 			block := b.(*modules.Block)
+			m.mux.Lock()
 			for _, v := range m.robots {
 				v.ReceiveBlock(block)
 			}
+			m.mux.Unlock()
 		}
 	}
 }
 
 func (m *RobotManagerImpl) Stop() {
 	m.qc <- true
+	for _, v := range m.robots {
+		v.Exit()
+	}
+}
+
+func (m *RobotManagerImpl) LoadTask() error {
+	task, err := m.db.LoadAllRobot()
+	if err != nil {
+		return fmt.Errorf("%w%s", err, utils.LineNo())
+	}
+
+	for _, v := range task {
+		err = m.runRobot(v)
+		if err != nil {
+			m.l.Errorf("run robot[%s] failed\n", v)
+			return fmt.Errorf("%w%s", err, utils.LineNo())
+		}
+	}
+	return nil
 }
 
 type RobotConfig struct {
@@ -135,7 +167,7 @@ func (m *RobotManagerImpl) CreateRobot(c *gin.Context) {
 		TP:        req.TP,
 		SL:        req.SL,
 		EvenChips: req.EvenChips,
-		OddChips:  req.EvenChips,
+		OddChips:  req.OddChips,
 	}
 
 	err = m.db.CreateRobotParameter(&para)
@@ -146,7 +178,6 @@ func (m *RobotManagerImpl) CreateRobot(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"code": 200, "msg": "success", "id": rid, "addr": addr, "version": ver})
-	return
 }
 
 func (m *RobotManagerImpl) RunRobot(c *gin.Context) {
@@ -157,27 +188,8 @@ func (m *RobotManagerImpl) RunRobot(c *gin.Context) {
 		return
 	}
 
-	para, err := m.db.GetRobotParameter(rid)
+	err := m.runRobot(rid)
 	if err != nil { //ErrNotFound 同样处理
-		m.l.Error(err.Error())
-		c.JSON(200, ErrInternalError)
-		return
-	}
-
-	poolInfo, err := m.db.GetPoolById(para.PoolId)
-	if err != nil {
-		m.l.Error(err.Error())
-		c.JSON(200, ErrInternalError)
-		return
-	}
-
-	r := NewRobot(para, poolInfo, m.l, m.trx)
-	m.robots[rid] = r
-	r.Working()
-
-	para.State = 1
-	err = m.db.UpdateRobotParameter(para.Rid, para)
-	if err != nil {
 		m.l.Error(err.Error())
 		c.JSON(200, ErrInternalError)
 		return
@@ -185,6 +197,33 @@ func (m *RobotManagerImpl) RunRobot(c *gin.Context) {
 
 	c.JSON(200, responseSuccess("success"))
 	return
+}
+
+func (m *RobotManagerImpl) runRobot(rid string) error {
+	para, err := m.db.GetRobotParameter(rid)
+	if err != nil { //ErrNotFound 同样处理
+		return fmt.Errorf("%w%s", err, utils.LineNo())
+	}
+
+	poolInfo, err := m.db.GetPoolById(para.PoolId)
+	if err != nil {
+		return fmt.Errorf("%w%s", err, utils.LineNo())
+	}
+
+	para.State = 1
+	err = m.db.UpdateRobotParameter(para.Rid, para)
+	if err != nil {
+		return fmt.Errorf("%w%s", err, utils.LineNo())
+	}
+
+	r := NewRobot(para, poolInfo, m.l, m.trx)
+	go r.Working()
+	time.Sleep(time.Second)
+
+	m.mux.Lock()
+	m.robots[rid] = r
+	m.mux.Unlock()
+	return nil
 }
 
 func (m *RobotManagerImpl) StopRobot(c *gin.Context) {

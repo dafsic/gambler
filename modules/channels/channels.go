@@ -43,7 +43,7 @@ func NewChanManager(log mylog.Logging) ChanManager {
 	c.l.Info("Init...")
 
 	// 打包进区块的所有交易hash、区块高度、区块hash
-	c.chans["block"] = make(chan interface{}, 1)
+	c.chans["block"] = make(chan interface{}) //无缓冲，阻塞就不要了
 
 	return c
 }

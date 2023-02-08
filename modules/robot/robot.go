@@ -43,7 +43,7 @@ const (
 
 type Robot interface {
 	Working()                              // 运行
-	Exit()                                 // 停止
+	Exit()                                 // 退出
 	PrintParameter() *store.RobotParameter // 使用的参数
 	ReceiveBlock(*modules.Block)           // 接收最新区块
 }
@@ -68,14 +68,13 @@ func NewRobot(rp *store.RobotParameter, pi *store.PoolInfo, log *utils.Logger, c
 		pool:         pi,
 		blockCounter: make(map[sta]int, 2),
 		//betCounter:   make(map[sta]int, 2),
-		blockC:   make(chan *modules.Block, 1), //只有1个缓冲，阻塞了就停止机器人
+		blockC:   make(chan *modules.Block), //无缓冲，阻塞了就停止机器人
 		trx:      cli,
 		l:        log,
 		isRefund: true,
 	}
 	r.state.Set(INVALID)
 
-	r.l.Infof("Robot[%s] Working...\n", rp.Rid)
 	return r
 }
 
@@ -90,6 +89,7 @@ func (r *RobotImpl) ReceiveBlock(b *modules.Block) {
 }
 
 func (r *RobotImpl) Working() {
+	r.l.Infof("robot[%s] is working\n", r.para.Rid)
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	for {
@@ -123,7 +123,7 @@ func (r *RobotImpl) dealBlock(block *modules.Block) {
 		r.blockCounter[ODD] += 1
 	}
 
-	r.l.Infof("robot[%s] odd:%d,even:%d\n", r.para.Rid, r.blockCounter[ODD], r.blockCounter[EVEN])
+	r.l.Debugf("robot[%s] odd:%d,even:%d\n", r.para.Rid, r.blockCounter[ODD], r.blockCounter[EVEN])
 
 	//如果之前中了，要等回款后才继续下注
 	if !r.isRefund {
@@ -215,12 +215,12 @@ func (r *RobotImpl) tryBet(first bool) (bool, error) {
 			var amount int64
 			switch s {
 			case EVEN:
-				amount = int64(r.para.OddChips[r.betCounter+1])
+				amount = int64(r.para.OddChips[r.betCounter])
 			case ODD:
-				amount = int64(r.para.EvenChips[r.betCounter+1])
+				amount = int64(r.para.EvenChips[r.betCounter])
 			}
 
-			if balance-amount*base <= int64(r.para.SL)*base || balance >= int64(r.para.TP) {
+			if balance-amount*base <= int64(r.para.SL)*base || balance >= int64(r.para.TP)*base {
 				r.l.Warnf("robot[%s] 下注失败,止盈或者止损,banlance:%d\n", r.para.Rid, balance/base)
 				return false, nil
 			}
@@ -230,7 +230,7 @@ func (r *RobotImpl) tryBet(first bool) (bool, error) {
 				return false, fmt.Errorf("%w%s", err, utils.LineNo())
 			}
 
-			r.l.Infof("robot[%s] 下注成功:%d,hash:%s\n", amount, hash)
+			r.l.Infof("robot[%s] 下注成功:%d,hash:%s\n", r.para.Rid, amount, hash)
 			r.lastBetHash = hash
 			r.betCounter += 1
 			r.state.Set(turn)

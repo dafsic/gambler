@@ -13,5 +13,6 @@ func DefaultGamblerCfg() *GamblerCfg {
 		Pool:         "",
 		Refund:       "",
 		Token:        "trx",
+		DB:           "",
 	}
 }

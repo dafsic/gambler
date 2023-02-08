@@ -6,8 +6,9 @@ import (
 	"github.com/dafsic/gambler/modules/channels"
 	"github.com/dafsic/gambler/modules/client"
 	"github.com/dafsic/gambler/modules/listent"
-	"github.com/dafsic/gambler/modules/pkmanager"
-	"github.com/dafsic/gambler/modules/sched"
+	"github.com/dafsic/gambler/modules/robot"
+	"github.com/dafsic/gambler/modules/server"
+	"github.com/dafsic/gambler/modules/store"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/fx"
 )
@@ -53,10 +54,12 @@ var runCmd = &cli.Command{
 			config.CfgModule,
 			mylog.Module,
 			channels.ChanManagerModule,
-			pkmanager.PKManagerModule,
 			listent.ListenModule,
-			sched.SchedModule,
 			client.ClientModule,
+			robot.SchedModule,
+			robot.RegisterRouters,
+			server.ServerModule,
+			store.StoreModule,
 			fx.NopLogger,
 		).Run() // 模块里不能有阻塞的协程，都要用go开启一个新的线程，Run()函数会在app.start后卡住等信号，收到中断信号会调用app.stop
 

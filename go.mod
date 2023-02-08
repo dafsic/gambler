@@ -36,6 +36,7 @@ require (
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/gin-gonic/gin v1.8.2
+	github.com/go-sql-driver/mysql v1.7.0
 	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect

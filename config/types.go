@@ -24,6 +24,7 @@ type GamblerCfg struct {
 	Token        string   `toml:"token"`   //token种类(trx,usdt...)
 	KafkaTopic   string   `toml:"kafkaTopic"`
 	KafkaBrokers []string `toml:"kafkaBrokers"`
+	DB           string   `toml:"mysql"`
 }
 
 func (a *GamblerCfg) GetElem(e string) interface{} {

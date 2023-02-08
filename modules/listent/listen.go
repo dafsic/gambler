@@ -36,6 +36,7 @@ func NewListener(lc fx.Lifecycle, log mylog.Logging, cfg config.ConfigI, chanMgr
 		kafka_topic:   cfg.GetElem("kafkaTopic").(string),
 	}
 	listener.l.Info("Init...")
+
 	lc.Append(fx.Hook{
 		// app.start调用
 		OnStart: func(ctx context.Context) error {
@@ -86,7 +87,7 @@ func (listerner *ListenerImpl) Working() {
 				listerner.l.Error(err.Error())
 				continue
 			}
-			listerner.l.Infof("Receive a block --> ts:%d, hash: %s, height: %d,txs:%d\n", block.Ts, block.BlockHash, block.Height, len(block.Txs))
+			listerner.l.Debugf("Receive a block --> ts:%d, hash: %s, height: %d,txs:%d\n", block.Ts, block.BlockHash, block.Height, len(block.Txs))
 			listerner.wc <- &block
 		}
 	}
