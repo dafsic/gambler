@@ -19,7 +19,8 @@ func main() {
 	fmt.Printf("dst:%s,%x\n", hexTo, v)
 
 	//反向
-	hex, err := hex.DecodeString(hexTo[2:])
+	//hex, err := hex.DecodeString(hexTo[2:])
+	hex, err := hex.DecodeString("7f201283bb4c475f1dee17847f12d27445008132")
 	src := base58.CheckEncode(hex, 65)
 	fmt.Printf("src:%s\n", src)
 }
