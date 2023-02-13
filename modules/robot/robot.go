@@ -150,24 +150,24 @@ func (r *RobotImpl) dealBlock(block *modules.Block) {
 
 	for _, tx := range block.Txs {
 		if tx == r.lastBetHash { //下注交易包含在区块中
-			if (r.state == ODD && evenBlock) || (r.state == EVEN && !evenBlock) { //中了
+			if (r.state == EVEN && evenBlock) || (r.state == ODD && !evenBlock) { //中了
 				r.l.Infof("robot[%s] 中了,block:%s\n", r.para.Rid, block.BlockHash)
 				r.state.Set(INVALID)
 				r.lastBetHash = ""
 				r.betCounter = 0
 				r.isRefund = false
 			} else {
-				r.l.Infof("robot[%s] 没中,block:%s\n", block.BlockHash)
+				r.l.Infof("robot[%s] 没中,block:%s\n", r.para.Rid, block.BlockHash)
 				//没中，但奇偶连续情况并未打断的情况下，不用管是否跳块，继续下注
 				success, err = r.tryBet(false)
 				if err != nil {
 					// 下注出错，这一轮还可以接着下
 					r.l.Errorf("robot[%s] err:%s\n", r.para.Rid, err.Error())
-					return
+					//return
 				}
 				if !success {
 					//没错,但不满足下注条件了,需要重置
-					r.l.Infof("robot[%s] 没中,但在跳块中中了,或者超过最大下注次数,或者止盈止损了\n", r.para.Rid)
+					r.l.Infof("robot[%s] 没中,但在跳块中中了,或超过最大下注次数,或止盈止损\n", r.para.Rid)
 					r.lastBetHash = ""
 					r.betCounter = 0
 					r.state.Set(INVALID)

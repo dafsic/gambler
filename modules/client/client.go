@@ -23,7 +23,7 @@ type TrxClient interface {
 	GetBalance(addr, token string) (int64, error)
 	GetBalanceTrx(addr string) (int64, error)
 	GetBalanceContract(addr, contract string) (int64, error)
-	Generateaddress() (string, string, error)
+	Generateaddress() (string, string, string, error)
 }
 
 type TrxClientImpl struct {
@@ -49,7 +49,7 @@ type TxResult struct {
 	T Transaction `json:"transaction"`
 }
 
-func (t *TrxClientImpl) Generateaddress() (string, string, error) {
+func (t *TrxClientImpl) Generateaddress() (string, string, string, error) {
 	url := fmt.Sprintf("http://%s/wallet/generateaddress", t.Node)
 
 	req, _ := http.NewRequest("GET", url, nil)
@@ -58,23 +58,24 @@ func (t *TrxClientImpl) Generateaddress() (string, string, error) {
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", "", fmt.Errorf("%w%s", err, utils.LineNo())
+		return "", "", "", fmt.Errorf("%w%s", err, utils.LineNo())
 	}
 
 	defer res.Body.Close()
 	body, _ := io.ReadAll(res.Body)
 
 	var r struct {
-		Key  string `json:"privateKey"`
-		Addr string `json:"hexAddress"`
+		Key     string `json:"privateKey"`
+		HexAddr string `json:"hexAddress"`
+		Addr    string `json:"address"`
 	}
 
 	err = json.Unmarshal(body, &r)
 	if err != nil {
-		return "", "", fmt.Errorf("%w%s", err, utils.LineNo())
+		return "", "", "", fmt.Errorf("%w%s", err, utils.LineNo())
 	}
 
-	return r.Addr, r.Key, nil
+	return r.Addr, r.HexAddr, r.Key, nil
 }
 
 func (t *TrxClientImpl) GetBalanceTrx(addr string) (int64, error) {
@@ -208,14 +209,16 @@ func (t *TrxClientImpl) TransferContract(from, to, key string, amount int64, con
 		return "", fmt.Errorf("%w%s", err, utils.LineNo())
 	}
 
+	//t.l.Infof("broadcast:%s\n", rst)
 	var r struct {
-		Txid string `json:"txid"`
+		Result bool   `json:"result"`
+		Txid   string `json:"txid"`
 	}
 	err = json.Unmarshal(rst, &r)
 	if err != nil {
 		return "", fmt.Errorf("%w%s", err, utils.LineNo())
 	}
-	if r.Txid == "" {
+	if r.Txid == "" || !r.Result {
 		return "", fmt.Errorf("%s%s", rst, utils.LineNo())
 	}
 	return r.Txid, nil

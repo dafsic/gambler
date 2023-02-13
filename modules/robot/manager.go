@@ -141,6 +141,12 @@ func (m *RobotManagerImpl) CreateRobot(c *gin.Context) {
 		return
 	}
 
+	if len(req.EvenChips) != len(req.OddChips) || len(req.EvenChips) < req.NumOfBets {
+		c.JSON(200, ErrParameter)
+		return
+	}
+
+	req.Pool = addr2hex(req.Pool)
 	poolInfo, err := m.db.GetPoolByAddr(req.Pool, req.Token)
 	if err != nil {
 		m.l.Error(err.Error())
@@ -150,7 +156,7 @@ func (m *RobotManagerImpl) CreateRobot(c *gin.Context) {
 
 	rid := m.snow.Generate().String()
 
-	addr, key, err := m.trx.Generateaddress()
+	addr, hexAddr, key, err := m.trx.Generateaddress()
 	if err != nil {
 		m.l.Error(err.Error())
 		c.JSON(200, ErrInternalError)
@@ -160,7 +166,7 @@ func (m *RobotManagerImpl) CreateRobot(c *gin.Context) {
 	para := store.RobotParameter{
 		Rid:       rid,
 		PoolId:    poolInfo.Id,
-		Addr:      addr,
+		Addr:      hexAddr,
 		Key:       key,
 		StartNum:  req.StartNum,
 		NumOfBets: req.NumOfBets,
@@ -200,6 +206,12 @@ func (m *RobotManagerImpl) RunRobot(c *gin.Context) {
 }
 
 func (m *RobotManagerImpl) runRobot(rid string) error {
+	m.mux.Lock()
+	if _, ok := m.robots[rid]; ok {
+		return nil
+	}
+	m.mux.Unlock()
+
 	para, err := m.db.GetRobotParameter(rid)
 	if err != nil { //ErrNotFound 同样处理
 		return fmt.Errorf("%w%s", err, utils.LineNo())
@@ -234,6 +246,7 @@ func (m *RobotManagerImpl) StopRobot(c *gin.Context) {
 		return
 	}
 
+	m.mux.Lock()
 	r, ok := m.robots[rid]
 	if !ok {
 		m.l.Errorf("robot[%s] not found\n", rid)
@@ -243,6 +256,7 @@ func (m *RobotManagerImpl) StopRobot(c *gin.Context) {
 
 	m.robots[rid].Exit()  //退出线程
 	delete(m.robots, rid) //释放内存
+	m.mux.Unlock()
 
 	r.PrintParameter().State = 0
 	err := m.db.UpdateRobotParameter(rid, r.PrintParameter())
@@ -274,6 +288,12 @@ func (m *RobotManagerImpl) UpdateRobotParameter(c *gin.Context) {
 		return
 	}
 
+	if len(req.EvenChips) != len(req.OddChips) || len(req.EvenChips) < req.NumOfBets {
+		c.JSON(200, ErrParameter)
+		return
+	}
+
+	req.Pool = addr2hex(req.Pool)
 	poolInfo, err := m.db.GetPoolByAddr(req.Pool, req.Token)
 	if err != nil {
 		m.l.Error(err.Error())
@@ -313,7 +333,13 @@ func (m *RobotManagerImpl) GetBalance(c *gin.Context) {
 		return
 	}
 
-	amount, err := m.trx.GetBalance(addr, token)
+	hexAddr := addr2hex(addr)
+	if hexAddr == "" {
+		c.JSON(200, ErrParameter)
+		return
+	}
+
+	amount, err := m.trx.GetBalance(hexAddr, token)
 	if err != nil {
 		m.l.Error(err.Error())
 		c.JSON(200, ErrInternalError)
@@ -324,6 +350,10 @@ func (m *RobotManagerImpl) GetBalance(c *gin.Context) {
 	return
 }
 
+func (m *RobotManagerImpl) Ping(c *gin.Context) {
+	c.JSON(200, responseSuccess("success"))
+}
+
 func (m *RobotManagerImpl) RegisterRouters() {
 	m.l.Info("resister handler...")
 	m.srv.RegisterHandler("post", "/robot/create", m.CreateRobot)
@@ -331,6 +361,7 @@ func (m *RobotManagerImpl) RegisterRouters() {
 	m.srv.RegisterHandler("get", "/robot/stop", m.StopRobot)
 	m.srv.RegisterHandler("post", "/robot/update", m.UpdateRobotParameter)
 	m.srv.RegisterHandler("get", "/robot/balance", m.GetBalance)
+	m.srv.RegisterHandler("get", "/ping", m.Ping)
 }
 
 var SchedModule = fx.Options(fx.Provide(NewRobotManager))

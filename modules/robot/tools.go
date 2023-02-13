@@ -27,10 +27,10 @@ func IsEvenNum(h string) bool {
 }
 
 func IsRefund(from, to string, minTs, maxTs int64, token string) (bool, error) {
-	switch token {
-	case "trx":
+	switch strings.ToUpper(token) {
+	case "TRX":
 		return IsRefundTrx(from, to, minTs, maxTs)
-	case "usdt":
+	case "USDT":
 		return IsRefundUsdt(from, to, minTs, maxTs, modules.USDT_CONTRACT)
 	default:
 		return false, nil
@@ -60,7 +60,7 @@ func IsRefundTrx(from, to string, minTs, maxTs int64) (bool, error) {
 }
 func IsRefundUsdt(from, to string, minTs, maxTs int64, ca string) (bool, error) {
 	//url := fmt.Sprintf("https://api.trongrid.io/v1/accounts/%s/transactions/trc20?only_to=true&min_timestamp=%d&max_timestamp=%d&search_internal=false&contract_address=%s", to, minTs, maxTs)
-	url := fmt.Sprintf("https://nile.trongrid.io/v1/accounts/%s/transactions/trc20?only_to=true&min_timestamp=%d&max_timestamp=%d&search_internal=false&contract_address=%s", to, minTs, maxTs, addr2hex(ca))
+	url := fmt.Sprintf("https://nile.trongrid.io/v1/accounts/%s/transactions/trc20?only_to=true&min_timestamp=%d&max_timestamp=%d&search_internal=false&contract_address=%s", to, minTs, maxTs, hex2addr(ca))
 
 	req, _ := http.NewRequest("GET", url, nil)
 
@@ -77,14 +77,23 @@ func IsRefundUsdt(from, to string, minTs, maxTs int64, ca string) (bool, error) 
 		return false, fmt.Errorf("%w%s", err, utils.LineNo())
 	}
 
-	return strings.Contains(string(body), addr2hex(from)), nil
+	return strings.Contains(string(body), hex2addr(from)), nil
 }
 
-func addr2hex(addr string) string {
-	hex, err := hex.DecodeString(addr[2:])
+func hex2addr(h string) string {
+	a, err := hex.DecodeString(h[2:])
 	if err != nil {
 		return ""
 	}
 
-	return base58.CheckEncode(hex, 65)
+	return base58.CheckEncode(a, 65)
+}
+
+func addr2hex(a string) string {
+	decode, _, err := base58.CheckDecode(a)
+	if err != nil {
+		return ""
+	}
+
+	return fmt.Sprintf("41%x", decode)
 }

@@ -23,14 +23,16 @@ type Store interface {
 }
 
 type StoreImpl struct {
-	db *sql.DB
-	l  *utils.Logger
-	e  Encoder
+	db       *sql.DB
+	l        *utils.Logger
+	e        Encoder
+	password string
 }
 
 func NewStore(lc fx.Lifecycle, log mylog.Logging, cfg config.ConfigI) Store {
 	s := &StoreImpl{
-		l: log.GetLogger("db"),
+		l:        log.GetLogger("db"),
+		password: "iDxSd9m8zJ6wyCh7",
 	}
 
 	lc.Append(fx.Hook{
@@ -88,10 +90,10 @@ func (s *StoreImpl) GetRobotParameter(rid string) (*RobotParameter, error) {
 	var r RobotParameter
 	r.Rid = rid
 
-	var oc, ec string
+	var enKey, oc, ec string
 	row := s.db.QueryRow("SELECT `pool_id`,`start_num`,`num_of_bets`,`addr`,`key`,`odd_chips`,`even_chips`,`take_profit`,`stop_loss`,`state` FROM `robot` WHERE `rid`=?", rid)
 
-	err := row.Scan(&r.PoolId, &r.StartNum, &r.NumOfBets, &r.Addr, &r.Key, &oc, &ec, &r.TP, &r.SL, &r.State)
+	err := row.Scan(&r.PoolId, &r.StartNum, &r.NumOfBets, &r.Addr, &enKey, &oc, &ec, &r.TP, &r.SL, &r.State)
 	if err != nil {
 		return nil, fmt.Errorf("%w%s", err, utils.LineNo())
 	}
@@ -105,6 +107,12 @@ func (s *StoreImpl) GetRobotParameter(rid string) (*RobotParameter, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w%s", err, utils.LineNo())
 	}
+
+	r.Key, err = utils.AesDecryptoBase64(enKey, s.password)
+	if err != nil {
+		return nil, fmt.Errorf("%w%s", err, utils.LineNo())
+	}
+
 	return &r, nil
 }
 
@@ -112,7 +120,12 @@ func (s *StoreImpl) CreateRobotParameter(r *RobotParameter) error {
 	sql := "INSERT INTO `robot` (`rid`,`pool_id`,`start_num`,`num_of_bets`,`addr`,`key`,`odd_chips`,`even_chips`,`take_profit`,`stop_loss`) VALUES (?,?,?,?,?,?,?,?,?,?)"
 	oc := s.e.String(r.OddChips)
 	ec := s.e.String(r.EvenChips)
-	_, err := s.db.Exec(sql, r.Rid, r.PoolId, r.StartNum, r.NumOfBets, r.Addr, r.Key, oc, ec, r.TP, r.SL)
+	enKey, err := utils.AesEncryptoBase64(r.Key, s.password)
+	if err != nil {
+		return fmt.Errorf("%w%s", err, utils.LineNo())
+	}
+
+	_, err = s.db.Exec(sql, r.Rid, r.PoolId, r.StartNum, r.NumOfBets, r.Addr, enKey, oc, ec, r.TP, r.SL)
 	if err != nil {
 		return fmt.Errorf("%w%s", err, utils.LineNo())
 	}
@@ -120,11 +133,12 @@ func (s *StoreImpl) CreateRobotParameter(r *RobotParameter) error {
 	return nil
 }
 
+// 不能更改addr和key
 func (s *StoreImpl) UpdateRobotParameter(rid string, para *RobotParameter) error {
-	sql := "UPDATE `robot` SET `pool_id`=?,`start_num`=?,`num_of_bets`=?,`addr`=?,`key`=?,`odd_chips`=?,`even_chips`=?,`take_profit`=?,`stop_loss`=?,`state`=? WHERE `rid` = ?"
+	sql := "UPDATE `robot` SET `pool_id`=?,`start_num`=?,`num_of_bets`=?,`odd_chips`=?,`even_chips`=?,`take_profit`=?,`stop_loss`=?,`state`=? WHERE `rid` = ?"
 	oc := s.e.String(para.OddChips)
 	ec := s.e.String(para.EvenChips)
-	_, err := s.db.Exec(sql, para.PoolId, para.StartNum, para.NumOfBets, para.Addr, para.Key, oc, ec, para.TP, para.SL, para.State, rid)
+	_, err := s.db.Exec(sql, para.PoolId, para.StartNum, para.NumOfBets, oc, ec, para.TP, para.SL, para.State, rid)
 	if err != nil {
 		return fmt.Errorf("%w%s", err, utils.LineNo())
 	}

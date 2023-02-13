@@ -15,6 +15,6 @@ func main() {
 	fmt.Printf("加密:%s,%v\n", c, e)
 
 	//解密
-	d, e := utils.AesDecryptooBase64(c, key)
+	d, e := utils.AesDecryptoBase64("0CHVY0oe96CoV9BKYDOQtMxR42ftQX/tcbJbSd1xckUWI8J/Lz1Fzr2UrIc1jNwDklxT19aqyisqUqhqUMNbVTokV7UFdtWj/fcd9VUz5rg=", key)
 	fmt.Printf("解密:%s,%v\n", d, e)
 }

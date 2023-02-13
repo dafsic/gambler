@@ -74,7 +74,7 @@ func AesEncryptoBase64(data, key string) (string, error) {
 
 }
 
-func AesDecryptooBase64(data, key string) (string, error) {
+func AesDecryptoBase64(data, key string) (string, error) {
 	cdata, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
 		return "", fmt.Errorf("%w%s", err, LineNo())

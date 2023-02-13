@@ -1,3 +1,4 @@
-1. key 加密存储
-2. worker和manager程序分离，通过rpc通信，这样worker可以横向扩展
-3. 
+1. key 加密存储(已完成)
+2. 停止机器人的时候是直接停，还是等这一轮下注结束后再停止 
+3. worker和manager程序分离，通过rpc通信，这样worker可以横向扩展
+4.  
