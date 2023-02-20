@@ -45,7 +45,7 @@ type Robot interface {
 	Working()                              // 运行
 	Exit()                                 // 退出
 	PrintParameter() *store.RobotParameter // 使用的参数
-	ReceiveBlock(*modules.Block)           // 接收最新区块
+	ReceiveBlock(*modules.Block) bool      // 接收最新区块
 }
 
 type RobotImpl struct {
@@ -68,7 +68,7 @@ func NewRobot(rp *store.RobotParameter, pi *store.PoolInfo, log *utils.Logger, c
 		pool:         pi,
 		blockCounter: make(map[sta]int, 2),
 		//betCounter:   make(map[sta]int, 2),
-		blockC:   make(chan *modules.Block), //无缓冲，阻塞了就停止机器人
+		blockC:   make(chan *modules.Block, 1), //无缓冲，阻塞了就停止机器人
 		trx:      cli,
 		l:        log,
 		isRefund: true,
@@ -79,12 +79,13 @@ func NewRobot(rp *store.RobotParameter, pi *store.PoolInfo, log *utils.Logger, c
 }
 
 // 必须立刻处理，不能等待
-func (r *RobotImpl) ReceiveBlock(b *modules.Block) {
+func (r *RobotImpl) ReceiveBlock(b *modules.Block) bool {
 	select {
 	case r.blockC <- b:
+		return true
 	default:
 		r.l.Errorf("robot[%s] channel is full,stop!", r.para.Rid)
-		r.cancel()
+		return false
 	}
 }
 
@@ -136,39 +137,47 @@ func (r *RobotImpl) dealBlock(block *modules.Block) {
 		return
 	}
 
-	//尝试开启第一次下注(新一轮)
-	success, err := r.tryBet(true)
-	if err != nil {
-		r.l.Errorf("robot[%s],err:%s\n", r.para.Rid, err.Error())
+	if r.state == INVALID {
+		_, err := r.tryBet()
+		if err != nil {
+			r.l.Errorf("robot[%s],err:%s\n", r.para.Rid, err.Error())
+		}
 		return
+		// 刚下注,下一个区块再判断是否中奖
 	}
+	// //尝试开启第一次下注(新一轮)
+	// success, err := r.tryBet(true)
+	// if err != nil {
+	// 	r.l.Errorf("robot[%s],err:%s\n", r.para.Rid, err.Error())
+	// 	return
+	// }
 
-	// 第一次下注成功or没下过注，就不需要处理区块
-	if success || r.state == INVALID {
-		return
-	}
+	// // 第一次下注成功or没下过注，就不需要处理区块
+	// if success || r.state == INVALID {
+	// 	return
+	// }
 
 	for _, tx := range block.Txs {
 		if tx == r.lastBetHash { //下注交易包含在区块中
 			if (r.state == EVEN && evenBlock) || (r.state == ODD && !evenBlock) { //中了
 				r.l.Infof("robot[%s] 中了,block:%s\n", r.para.Rid, block.BlockHash)
-				r.state.Set(INVALID)
-				r.lastBetHash = ""
 				r.betCounter = 0
+				r.state.Set(INVALID)
 				r.isRefund = false
 			} else {
 				r.l.Infof("robot[%s] 没中,block:%s\n", r.para.Rid, block.BlockHash)
-				//没中，但奇偶连续情况并未打断的情况下，不用管是否跳块，继续下注
-				success, err = r.tryBet(false)
+				//没中，但奇偶连续情况并未打断的情况下,不用管是否跳块,继续下注
+				success, err := r.tryBet()
 				if err != nil {
-					// 下注出错，这一轮还可以接着下
+					// 下注出错, 这个一轮结束
 					r.l.Errorf("robot[%s] err:%s\n", r.para.Rid, err.Error())
-					//return
+					r.betCounter = 0
+					r.state.Set(INVALID)
+					return
 				}
 				if !success {
 					//没错,但不满足下注条件了,需要重置
 					r.l.Infof("robot[%s] 没中,但在跳块中中了,或超过最大下注次数,或止盈止损\n", r.para.Rid)
-					r.lastBetHash = ""
 					r.betCounter = 0
 					r.state.Set(INVALID)
 				}
@@ -182,11 +191,11 @@ func (r *RobotImpl) dealBlock(block *modules.Block) {
 }
 
 // tryBet 如果到达下注条件就尝试去下注
-func (r *RobotImpl) tryBet(first bool) (bool, error) {
+func (r *RobotImpl) tryBet() (bool, error) {
 	// 已经下过第一注了，不用再下第一注了
-	if first && r.state != INVALID {
-		return false, nil
-	}
+	// if first && r.state != INVALID {
+	// 	return false, nil
+	// }
 
 	var base int64
 	switch strings.ToUpper(r.pool.Token) {

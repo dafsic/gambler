@@ -88,8 +88,13 @@ func (m *RobotManagerImpl) Working() {
 			b := <-m.blockC
 			block := b.(*modules.Block)
 			m.mux.Lock()
-			for _, v := range m.robots {
-				v.ReceiveBlock(block)
+			for rid, v := range m.robots {
+				if !v.ReceiveBlock(block) {
+					v.Exit()
+					m.mux.Lock()
+					delete(m.robots, rid) //释放内存
+					m.mux.Unlock()
+				}
 			}
 			m.mux.Unlock()
 		}
